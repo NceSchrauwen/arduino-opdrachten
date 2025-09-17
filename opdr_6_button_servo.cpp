@@ -1,23 +1,24 @@
-// Opdracht 6 - Servo rotate from 0 to 120 degrees with differing speeds
-// Written by: Nina Schrauwen 
+// Opdracht 6 - Servo laten bewegen van 0 naar 120 graden en terug in verschillende varianten en snelheden
+// Geschreven door: Nina Schrauwen 
 #include <Servo.h> 
 
-Servo myServo; // Create a servo object
-// Define constant variables
+Servo myServo; // Servo object aanmaken
+
+// Pin definities
 const int BTN1 = 3;
 const int BTN2 = 4;
 const int SERVO = 2;
 
-// Define states
+// Verschillende modes (welke knop(pen) actief zijn)
 enum Mode {
-  IDLE,
-  BTN1_MODE,
-  BTN2_MODE,
-  BOTH_BTNS_MODE
+  IDLE,          // Geen knop ingedrukt
+  BTN1_MODE,     // Alleen knop 1
+  BTN2_MODE,     // Alleen knop 2
+  BOTH_BTNS_MODE // Beide knoppen tegelijk
 };
 
-// Define global variables
-Mode currentMode = IDLE; // Start in IDLE mode 
+// Globale variabelen
+Mode currentMode = IDLE; 
 int btnState1 = 0;
 int btnState2 = 0;
 int angle;
@@ -26,96 +27,101 @@ int delayTime;
 
 void setup()
 {
-  // Start serial communication
-  Serial.begin(9600);
-  // Define inputs with pins
-  pinMode(BTN1, INPUT_PULLUP);
-  pinMode(BTN2, INPUT_PULLUP);
-  myServo.attach(SERVO);        // Attach the servo
+  Serial.begin(9600);         // Seriële monitor starten
+  pinMode(BTN1, INPUT_PULLUP); // Knop 1 op pull-up
+  pinMode(BTN2, INPUT_PULLUP); // Knop 2 op pull-up
+  myServo.attach(SERVO);       // Servo verbinden met pin
 }
 
-// Function to calculate the steps it takes to get to the right angle with the right timing
-void moveServo(int startAngle, int endAngle, int duration){
-  steps = abs(endAngle - startAngle);	// Number of steps
-  delayTime = duration / steps; //Time per step in milliseconds
-  
-  // If the start angle is smaller than the end angle then move upwards to that angle
-  if(startAngle < endAngle){
-    for(int angle = startAngle; angle <= endAngle; angle++){
-      // Write the current value of the angle to the servo
-      myServo.write(angle);
-      Serial.println(angle);
-      // Delay it with the calculated time
-      delay(delayTime);
-    }
-  // If the start angle is bigger than the end angle then move downwards to that angle
-  } else {
-    for(int angle = startAngle; angle >= endAngle; angle--){
-      // Write the current value of the angle to the servo
-      myServo.write(angle);
-      Serial.println(angle);
-      // Delay it with the calculated time
-      delay(delayTime);
-    }
+// Functie om de servo stap voor stap te bewegen
+// startAngle = beginstand
+// endAngle   = eindstand
+// duration   = hoelang de beweging totaal moet duren
+// mode       = welke modus actief is (voor de stopconditie)
+void moveServo(int startAngle, int endAngle, int duration, Mode mode) {
+  steps = abs(endAngle - startAngle);    // Aantal graden verschil
+  delayTime = duration / steps;          // Tijd per stap
+  int stepDir = (startAngle < endAngle) ? 1 : -1; // Richting bepalen (oplopend of aflopend)
+
+  // Van startAngle naar endAngle bewegen
+  for (int angle = startAngle; angle != endAngle + stepDir; angle += stepDir) {
+    // Knopstatussen uitlezen (pull-up omgedraaid)
+    bool b1 = !digitalRead(BTN1);
+    bool b2 = !digitalRead(BTN2);
+
+    // Per modus checken of de vereiste knop(pen) nog wel ingedrukt zijn
+    if (mode == BTN1_MODE && !b1) return;          // Stop als knop 1 losgelaten wordt
+    if (mode == BTN2_MODE && !b2) return;          // Stop als knop 2 losgelaten wordt
+    if (mode == BOTH_BTNS_MODE && !(b1 && b2)) return; // Stop als één van de 2 losgelaten wordt
+
+    myServo.write(angle);   // Servo bewegen naar huidige stap
+    delay(delayTime);       // Even wachten zodat beweging op tijd klopt
   }
 }
 
-void loop()
-{
-  // Read the button states, because of the pull-up logic LOW is HIGH 
-  btnState1 = !digitalRead(BTN1); // Pull-up logic: LOW is HIGH (pressed)
+void loop() {
+  // Knopstatussen uitlezen (LOW = ingedrukt, dus omkeren met !)
+  btnState1 = !digitalRead(BTN1);
   btnState2 = !digitalRead(BTN2);
   
-  // If both states are being pressed (low) then set the current mode to BOTH_BTNS_MODE
-  if(btnState1 == HIGH && btnState2 == HIGH){
+  // Modus bepalen op basis van de knoppen
+  if (btnState1 && btnState2) {
     currentMode = BOTH_BTNS_MODE;
-  // If only btn1 is being pressed (low) then set the current mode to BTN1_MODE
-  } else if(btnState1 == HIGH){
+  } else if (btnState1) {
     currentMode = BTN1_MODE;
-  } else if(btnState2 == HIGH){
-  // If only btn2 is being pressed (low) then set the current mode to BTN2_MODE
+  } else if (btnState2) {
     currentMode = BTN2_MODE;
-  // If no buttons are being pressed then set the current mode to IDLE
   } else {
-	 currentMode = IDLE; // Default mode when no buttons are pressed
+    currentMode = IDLE;
   }
-  
-  // Start a timer for whatever current mode is chosen 
-  unsigned long startTimer = millis(); 
 
-   // Process the current mode
+  unsigned long startTimer = millis(); // Tijdmeting starten
+
+  // Actie per modus
   switch (currentMode) {
-	// Turn in 1 second from 0 to 120 degrees, hold still for 2 seconds, then return from 120 to 0 degrees within a second
     case BOTH_BTNS_MODE:
       Serial.println("Mode: BTN1 + BTN2");
-      moveServo(0, 120, 1000);
-      delay(2000); // 2 sec standstill
-      moveServo(120, 0, 1000);
+      moveServo(0, 120, 1000, BOTH_BTNS_MODE); // Naar 120 in 1 seconde
+
+      // 2 seconden vasthouden (maar stoppen als knoppen losgelaten worden)
+      {
+        unsigned long holdStart = millis();
+        while (millis() - holdStart < 2000) {
+          bool b1 = !digitalRead(BTN1);
+          bool b2 = !digitalRead(BTN2);
+          if (!(b1 && b2)) {
+            Serial.println("Knoppen los tijdens vasthouden -> stoppen.");
+            return;
+          }
+        }
+      }
+
+      moveServo(120, 0, 1000, BOTH_BTNS_MODE); // Terug naar 0 in 1 seconde
       break;
-	// Turn in one second from 0 to 120 degrees, then return from 120 to 0 degrees within a second
+    
     case BTN1_MODE:
       Serial.println("Mode: BTN1");
-      moveServo(0, 120, 1000);
-      moveServo(120, 0, 1000);
+      moveServo(0, 120, 1000, BTN1_MODE); // Naar 120 in 1 seconde
+      moveServo(120, 0, 1000, BTN1_MODE); // Terug in 1 seconde
       break;
-    // Turn in 500ms from 0 to 120 degrees, then return from 120 to 0 degrees within 500ms
+	
     case BTN2_MODE:
       Serial.println("Mode: BTN2");
-      moveServo(0, 120, 500);
-      moveServo(120, 0, 500);
+      moveServo(0, 120, 500, BTN2_MODE);  // Naar 120 in 0,5 seconde
+      moveServo(120, 0, 500, BTN2_MODE);  // Terug in 0,5 seconde
       break;
-	// When no buttons are being pressed, do nothing 
+	
     case IDLE:
     default:
-      // Do nothing when idle
+      // Doe niks als er geen knoppen worden ingedrukt
       break;
   }
 	
-  // Calculate the total time based on the start time of the current mode
-  unsigned long endTimer = millis() - startTimer; // Calculate total elapsed time
+  // Totale tijd van de modus meten
+  unsigned long endTimer = millis() - startTimer;
   Serial.print("Mode duration: ");
   Serial.print(endTimer);
   Serial.println(" ms");
-  
-  delay(50); // Small delay for stability
+	
+  delay(50); // Kleine vertraging zodat het stabiel blijft draaien
 }
