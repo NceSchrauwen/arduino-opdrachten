@@ -1,129 +1,164 @@
-// Opdracht 8 - Code to program lights according to buttons on the remote, also for the speed
-// Written by: Nina Schrauwen
+// Opdracht 8 - Leds programmeren met IR afstandsbediening + knippersnelheid
+// Geschreven door: Nina Schrauwen
 // https://forum.arduino.cc/t/using-millis-for-timing-a-beginners-guide/483573/2
 
-// Include library for IR remote
 #include <IRremote.hpp>
 
-// Define the constant variables 
-const int RECV = 4;
-const int LED = 7;
-const int LED2 = 9;
-const int LED3 = 11;
-const int LED4 = 13;
-const bool isLEDOn = true;
-const bool isLED2On = true;
-// Define the global variables
-unsigned long irCode;
-unsigned long currentMillis;
-unsigned long previousMillis = 0;
-unsigned long previousMillisForBlink = 0;
-unsigned long previousMillisForBlink3 = 0;
-unsigned long previousMillisForBlink4 = 0;
-int currentLed;
-int blinkSpeed;
-bool isLED3On = false;
-bool isLED4On = false;
-// Variables for controlling the default LEDs
-unsigned long interval = 1000;  // Default blink speed for LEDs 1 and 2 
-// Create an IR receiver object and assign it to the RECV pin      
+// IR receiver pin
+const int RECV = 11;
+
+// Struct: koppelt IR-code ↔ knopnummer ↔ LED-pin
+struct ButtonMap {
+  unsigned long irCode;
+  int buttonNumber;
+  int ledPin;
+};
+
+// Mapping van 4 knoppen met bijbehorende LED-pins
+ButtonMap buttonMap[4] = {
+  {0xBA45FF00, 1, 2},   // Knop 1 → LED pin 2
+  {0xB946FF00, 2, 6},   // Knop 2 → LED pin 6
+  {0xB847FF00, 3, 9},   // Knop 3 → LED pin 9
+  {0xBB44FF00, 4, 10}   // Knop 4 → LED pin 10
+};
+
+// Globale variabelen
+int activeLEDs[2] = {-1, -1};                 // max. 2 actieve LEDs (indices uit buttonMap)
+unsigned long previousMillis[4] = {0,0,0,0};  // timer per LED
+int blinkSpeeds[4] = {0,0,0,0};               // snelheid per LED
+bool ledStates[4] = {false,false,false,false}; // huidige status (aan/uit)
+int globalBlinkSpeed = 500;                   // standaard = 500ms
+
+// IR receiver object
 IRrecv irrecv(RECV);
 
+// ---------------------------------------------------------------------------
+// Setup
+// ---------------------------------------------------------------------------
+void setup() {
+  Serial.begin(9600);  
+  IrReceiver.begin(RECV, ENABLE_LED_FEEDBACK); 
 
-void setup()
-{
-  // Set the LED pins as output
-  pinMode(LED, OUTPUT);
-  pinMode(LED2, OUTPUT);
-  pinMode(LED3, OUTPUT);
-  pinMode(LED4, OUTPUT);
-  // Initialize the IR receiver
-  irrecv.enableIRIn();
-  // Start serial communication
-  Serial.begin(9600);
-}
-
-//Function to led the correct leds blink at the correct blink interval
-void setBlink(bool ledBool, int blinkInterval, int ledPin, unsigned long &previousMillis) {
-	//If the state of the led is true start the timer
-    if (ledBool) {
-        unsigned long currentMillis = millis();
-		//When the desired interval has passed toggle the ledstate between HIGH and LOW 
-        if (currentMillis - previousMillis >= blinkInterval) {
-            previousMillis = currentMillis;
-            digitalWrite(ledPin, !digitalRead(ledPin));  // Toggle LED state
-        }
-    }
-}
-
-void loop()
-{
-  // Get the current time using millis() and store it within the currentMillis variable 
-  currentMillis = millis();
-  
-  // Always run the function because the function will decide if the led should be on or not based on the variables that are set
-  // You pass along the boolean for the validation, interval of blinking, which led it is, and the previous time interval
-  setBlink(isLEDOn, interval, LED, previousMillis);
-  setBlink(isLED2On, interval, LED2, previousMillisForBlink);
-  setBlink(isLED3On, blinkSpeed, LED3, previousMillisForBlink3);
-  setBlink(isLED4On, blinkSpeed, LED4, previousMillisForBlink4);
-  
-  // If the receiver receives a response
-  if (irrecv.decode()) {
-	// Decode the response and assign it to the irCode variable
-    irCode = irrecv.decodedIRData.decodedRawData;
-    // Print the IR code in hexadecimal format
-    Serial.print("Received IR Code: ");
-    Serial.println(irCode, HEX);
-    
-	// Switch to determine which button is being pressed (1 t/m 4)
-    switch(irCode){
-     case 0xBA45FF00:  //button 1
-      blinkSpeed = 100;  //set blinkspeed to 100ms
-      break;
-	  
-     case 0xB946FF00:  //button 2
-      blinkSpeed = 200; //set blinkspeed to 200ms
-      break;
-	  
-     case 0xB847FF00:  //button 3
-      blinkSpeed = 300;  //set blinkspeed to 300ms
-	  // If led 4 is not on
-	  if(!isLED4On){
-		  // If led 3 is on
-		  if(isLED3On){
-			isLED3On = false; // Set the boolean to false 
-			digitalWrite(LED3, LOW); // Power off led 3
-		  } else {
-			isLED3On = true; // Set the boolean to true, causing led 3 to turn on
-		  }
-	  }
-	  break;
-	  
-     case 0xBB44FF00:  //button 4
-	  blinkSpeed = 400;  //set blinkspeed to 300ms
-	  // If led 3 is not on
-      if(!isLED3On){
-		  // If led 4 is on
-		  if(isLED4On){
-			isLED4On = false; // Set the boolean to false
-			digitalWrite(LED4, LOW); // Power off led 3
-		  } else {
-			isLED4On = true;  // Set the boolean to true, causing led 4 to turn on
-	      }
-	  }
-	  break;
-	  
-    }
-	
-    // Continue receiving signals 
-    irrecv.resume();  
+  // LED-pins instellen als output en uitzetten
+  for (int i = 0; i < 4; i++) {
+    pinMode(buttonMap[i].ledPin, OUTPUT);
+    digitalWrite(buttonMap[i].ledPin, LOW);
   }
   
-  // Debug print the blink speed to make sure it's correct
-  Serial.print('Blinkspeed: ');
-  Serial.println(blinkSpeed);
-	
-  // Small delay for stability 
-  delay(50);
+  // Random seed, A0 is leeg dus bruikbaar
+  randomSeed(analogRead(A0));   
+
+  // Kies 2 verschillende random LEDs en zet ze aan
+  int first = random(0, 4);
+  int second;
+  do {
+    second = random(0, 4);
+  } while (second == first);
+
+  toggleLED(first);  
+  toggleLED(second);  
+
+  Serial.print("Startup LEDs: ");
+  Serial.print(buttonMap[first].buttonNumber);
+  Serial.print(" en ");
+  Serial.println(buttonMap[second].buttonNumber);
+
+  Serial.println("IR ontvanger klaar...");
+}
+
+// ---------------------------------------------------------------------------
+// LED togglen of snelheid aanpassen
+// ---------------------------------------------------------------------------
+void toggleLED(int mapIndex) {
+  int ledPin = buttonMap[mapIndex].ledPin;
+  int buttonNumber = buttonMap[mapIndex].buttonNumber;
+
+  // Check of LED al actief is
+  bool alreadyActive = false;
+  for (int i = 0; i < 2; i++) {
+    if (activeLEDs[i] == mapIndex) {
+      alreadyActive = true;
+      break;
+    }
+  }
+
+  if (alreadyActive) {
+    // Als LED actief is → snelheid aanpassen
+    globalBlinkSpeed = buttonNumber * 100;  // knopnummer × 100ms
+    Serial.print("Nieuwe snelheid: ");
+    Serial.println(globalBlinkSpeed);
+  } else {
+    // Nog niet actief → toevoegen
+    if (activeLEDs[0] != -1 && activeLEDs[1] != -1) {
+      // Al 2 actief → oudste verwijderen
+      int removed = activeLEDs[0];
+      digitalWrite(buttonMap[removed].ledPin, LOW);
+      ledStates[removed] = false;
+
+      // Schuif door en voeg nieuwe toe
+      activeLEDs[0] = activeLEDs[1];
+      activeLEDs[1] = mapIndex;
+      Serial.print("LED ");
+      Serial.print(buttonMap[removed].buttonNumber);
+      Serial.print(" verwijderd, LED ");
+      Serial.print(buttonNumber);
+      Serial.println(" toegevoegd");
+    }
+    else if (activeLEDs[0] == -1) {
+      activeLEDs[0] = mapIndex;
+      previousMillis[mapIndex] = millis();
+      ledStates[mapIndex] = false;
+      Serial.print("LED ");
+      Serial.print(buttonNumber);
+      Serial.println(" toegevoegd");
+    }
+    else {
+      activeLEDs[1] = mapIndex;
+      previousMillis[mapIndex] = millis();
+      ledStates[mapIndex] = false;
+      Serial.print("LED ");
+      Serial.print(buttonNumber);
+      Serial.println(" toegevoegd");
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// LEDs updaten op basis van globale snelheid
+// ---------------------------------------------------------------------------
+void updateLEDs() {
+  unsigned long currentMillis = millis();
+  for (int i = 0; i < 2; i++) {
+    int mapIndex = activeLEDs[i];
+    if (mapIndex != -1) {
+      if (currentMillis - previousMillis[mapIndex] >= globalBlinkSpeed) {
+        previousMillis[mapIndex] = currentMillis;
+        ledStates[mapIndex] = !ledStates[mapIndex];
+        digitalWrite(buttonMap[mapIndex].ledPin, ledStates[mapIndex] ? HIGH : LOW);
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Main loop
+// ---------------------------------------------------------------------------
+void loop() {
+  if (IrReceiver.decode()) {
+    unsigned long irCode = IrReceiver.decodedIRData.decodedRawData;
+    Serial.print("Ontvangen IR Code: ");
+    Serial.println(irCode, HEX);
+
+    // Check of de IR-code overeenkomt met de mapping
+    for (int i = 0; i < 4; i++) {
+      if (irCode == buttonMap[i].irCode) {
+        toggleLED(i);
+      }
+    }
+
+    IrReceiver.resume(); // klaarmaken voor volgende signaal
+  }
+
+  // LEDs updaten, ook zonder input
+  updateLEDs();
 }
