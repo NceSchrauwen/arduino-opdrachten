@@ -1,52 +1,45 @@
-// Opdracht 2 - Code to make the Led go on by pressing once, press on it again and it turns off
-// Written by: Nina Schrauwen
+// Opdracht 2 - LED aan/uit schakelen met een drukknop (toggle)
+// Geschreven door: Nina Schrauwen
 
-// Define constant variables
+// Pinnen
 const int BTN = 2;
 const int LED = 11;
 const int DELAY = 50;
-// Define global variables
+
+// Variabelen
 int btnStatus = LOW;
 int lastBtnStatus = LOW;
 int counter = 0;
 
 void setup()
 {
-  // Start serial communication to be able to monitor console output
-  Serial.begin(9600);
-  // Define input/output with their pins
+  Serial.begin(9600); // seriële monitor starten
+
   pinMode(LED, OUTPUT);
-  // The button is set up as a pull-up so i'll define it as such
-  pinMode(BTN, INPUT_PULLUP);
+  pinMode(BTN, INPUT_PULLUP); // knop als pull-up → standaard HIGH
 }
 
 void loop()
 {
-  // INPUT_PULLUP reads HIGH when the button is unpressed and LOW when pressed.
-  // Using !digitalRead(BTN) inverts this behavior so that HIGH represents a button press 
-  // and LOW represents a button release, ensuring the rest of the logic works as intended.
+  // Met INPUT_PULLUP is de knop normaal HIGH en wordt LOW bij indrukken.
+  // Met !digitalRead(BTN) draaien we dit om: HIGH = ingedrukt, LOW = losgelaten.
   btnStatus = !digitalRead(BTN);
   
-  // If the current status is high and the old status is low then add to the counter
-  if(btnStatus == HIGH && lastBtnStatus == LOW){
-	// Add one value to the counter when the condition is true
+  // Alleen tellen bij overgang van los → ingedrukt
+  if (btnStatus == HIGH && lastBtnStatus == LOW) {
     counter++;
   }
   
-  // If the count is even turn the led off
-  if(counter % 2 == 0){
-  	digitalWrite(LED, LOW);
-    Serial.println("Led OFF");
-  // If it's uneven turn the led on
+  // Even = LED uit, oneven = LED aan
+  if (counter % 2 == 0) {
+    digitalWrite(LED, LOW);
+    Serial.println("LED UIT");
   } else {
     digitalWrite(LED, HIGH);
-    Serial.println("Led ON");
+    Serial.println("LED AAN");
   }
   
-  // Update the last button status to the current button status
-  lastBtnStatus = btnStatus;
+  lastBtnStatus = btnStatus; // huidige status opslaan voor volgende check
   
-  // Small delay for stability
-  delay(DELAY);
-  
+  delay(DELAY); // korte pauze voor stabiliteit
 }
