@@ -1,63 +1,65 @@
-// Opdracht 7 - Ultrasonic distance controlling the servo within certain limits
-// Written by: Nina Schrauwen
+// Opdracht 7 - Ultrasoon sensor stuurt de servo binnen bepaalde grenzen
+// Geschreven door: Nina Schrauwen
+
 #include <Servo.h>
-// Define constant variables
+
+// Constante variabelen
 const int TRIG = 12;
 const int ECHO = 13;
 const int SERVO = 2;
-// Define global variables
+
+// Globale variabelen
 long duration;
 int distance;
 int angle;
 
-Servo servo; // Make a Servo object
+Servo servo; // Servo object
 
 void setup()
 {
-  // Start serial communication
   Serial.begin(9600);
-  // // Set up ultrasonic sensor pins as input and output
+
+  // Ultrasoon sensor instellen
   pinMode(TRIG, OUTPUT);
   pinMode(ECHO, INPUT);
   
   servo.attach(SERVO);
-  
-  servo.write(0);  // Resting position has to be 0 degrees
+  servo.write(0);  // rustpositie = 0 graden
 }
 
 void loop()
 {
-  // Make sure the pulse is clean by making sure the trigger was off before using it
+  // Schone puls genereren → trigger kort laag
   digitalWrite(TRIG, LOW);
   delayMicroseconds(2);
-  // Send a short pulse to initiate measurement
+
+  // Meetpuls versturen
   digitalWrite(TRIG, HIGH);
   delayMicroseconds(10);
   digitalWrite(TRIG, LOW);
   
-  // Measure the duration of the echo signal
+  // Lengte van echo signaal meten
   duration = pulseIn(ECHO, HIGH);
   
-  // Measure the distance in cm
-  distance = duration * 0.0344 /2;
+  // Omgerekend naar afstand in cm
+  distance = duration * 0.0344 / 2;
   
-  // Debug print to double check the distance
+  // Debug: afstand in cm tonen
   Serial.print("Afstand: ");
   Serial.print(distance);
   Serial.println(" cm");
   
-  // If the measured distance (in cm) is between 4 and 10
-  if(distance >= 4 && distance <= 10){
-    // Map the distance range (4-10 cm) to a servo angle (90-180 degrees)
+  // Servo bewegen als afstand tussen 4 en 10 cm ligt
+  if (distance >= 4 && distance <= 10) {
+    // Map afstand (4–10 cm) naar servohoek (90–180 graden)
     angle = map(distance, 4, 10, 90, 180);
     servo.write(angle);
     Serial.print(angle);
     Serial.println(" graden");
   } else {
-    // Otherwise back to resting position
+    // Buiten bereik → terug naar rustpositie
     servo.write(0);
   }
   
-  delay(500); // Delay for stability 
-  
+  delay(500); // korte pauze voor stabiliteit
 }
